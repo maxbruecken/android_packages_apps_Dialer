@@ -167,9 +167,9 @@ public class InCallActivity extends TransactionSafeActivity implements
     private SelectPhoneAccountListener mSelectAcctListener = new SelectPhoneAccountListener() {
         @Override
         public void onPhoneAccountSelected(PhoneAccountHandle selectedAccountHandle,
-                boolean setDefault) {
+                boolean setDefault, boolean setDefaultForContact) {
             InCallPresenter.getInstance().handleAccountSelection(selectedAccountHandle,
-                    setDefault);
+                    setDefault, setDefaultForContact);
         }
 
         @Override

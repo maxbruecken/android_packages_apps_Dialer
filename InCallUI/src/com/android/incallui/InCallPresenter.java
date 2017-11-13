@@ -914,12 +914,23 @@ public class InCallPresenter implements CallList.Listener,
         return mProximitySensor;
     }
 
-    public void handleAccountSelection(PhoneAccountHandle accountHandle, boolean setDefault) {
+    public void handleAccountSelection(PhoneAccountHandle accountHandle, boolean setDefault, boolean setDefaultForContact) {
         if (mCallList != null) {
             Call call = mCallList.getWaitingForAccountCall();
             if (call != null) {
                 String callId = call.getId();
                 TelecomAdapter.getInstance().phoneAccountSelected(callId, accountHandle, setDefault);
+
+                if (setDefaultForContact) {
+                    CallerInfoUtils.getCallerInfoForCall(mContext, call, new CallerInfoAsyncQuery.OnQueryCompleteListener() {
+                        @Override
+                        public void onQueryComplete(int token, Object cookie, CallerInfo ci) {
+                            if (ci.contactExists) {
+                                Log.d(this, "Found caller info for actual call");
+                            }
+                        }
+                    });
+                }
             }
         }
     }
