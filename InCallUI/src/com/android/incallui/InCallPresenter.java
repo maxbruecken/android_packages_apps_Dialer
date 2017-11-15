@@ -62,8 +62,10 @@ import com.android.incallui.util.TelecomCallUtil;
 import com.android.incalluibind.ObjectFactory;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -914,6 +916,15 @@ public class InCallPresenter implements CallList.Listener,
         return mProximitySensor;
     }
 
+    private static Map<String, PhoneAccountHandle> defaultAccounts = new HashMap<>();
+    public PhoneAccountHandle getDefaultAccount(Call call) {
+        String number = call.getNumber();
+        if (defaultAccounts.containsKey(number)) {
+            return defaultAccounts.get(number);
+        }
+        return null;
+    }
+
     public void handleAccountSelection(PhoneAccountHandle accountHandle, boolean setDefault, boolean setDefaultForContact) {
         if (mCallList != null) {
             Call call = mCallList.getWaitingForAccountCall();
@@ -922,6 +933,7 @@ public class InCallPresenter implements CallList.Listener,
                 TelecomAdapter.getInstance().phoneAccountSelected(callId, accountHandle, setDefault);
 
                 if (setDefaultForContact) {
+                    defaultAccounts.put(call.getNumber(), accountHandle);
                     CallerInfoUtils.getCallerInfoForCall(mContext, call, new CallerInfoAsyncQuery.OnQueryCompleteListener() {
                         @Override
                         public void onQueryComplete(int token, Object cookie, CallerInfo ci) {

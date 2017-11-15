@@ -690,6 +690,11 @@ public class InCallActivity extends TransactionSafeActivity implements
             Call pendingAccountSelectionCall = CallList.getInstance().getWaitingForAccountCall();
             if (pendingAccountSelectionCall != null) {
                 showCallCardFragment(false);
+                PhoneAccountHandle phoneAccountHandle = InCallPresenter.getInstance().getDefaultAccount(pendingAccountSelectionCall);
+                if (phoneAccountHandle != null) {
+                    InCallPresenter.getInstance().handleAccountSelection(phoneAccountHandle, false, false);
+                    return;
+                }
                 Bundle extras =
                         pendingAccountSelectionCall.getTelecomCall().getDetails().getIntentExtras();
 
