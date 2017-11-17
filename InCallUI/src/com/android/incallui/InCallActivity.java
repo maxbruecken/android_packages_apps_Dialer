@@ -16,7 +16,6 @@
 
 package com.android.incallui;
 
-import android.app.ActionBar;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
@@ -30,10 +29,7 @@ import android.content.DialogInterface.OnCancelListener;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.content.res.TypedArray;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.Point;
-import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Trace;
 import android.support.design.widget.TabLayout;
@@ -45,8 +41,6 @@ import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.MotionEvent;
-import android.view.OrientationEventListener;
-import android.view.Surface;
 import android.view.View;
 import android.view.View.OnTouchListener;
 import android.view.Window;
@@ -54,8 +48,6 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import com.android.contacts.common.activity.TransactionSafeActivity;
 import com.android.contacts.common.compat.CompatUtils;
@@ -690,11 +682,6 @@ public class InCallActivity extends TransactionSafeActivity implements
             Call pendingAccountSelectionCall = CallList.getInstance().getWaitingForAccountCall();
             if (pendingAccountSelectionCall != null) {
                 showCallCardFragment(false);
-                PhoneAccountHandle phoneAccountHandle = InCallPresenter.getInstance().getDefaultAccount(pendingAccountSelectionCall);
-                if (phoneAccountHandle != null) {
-                    InCallPresenter.getInstance().handleAccountSelection(phoneAccountHandle, false, false);
-                    return;
-                }
                 Bundle extras =
                         pendingAccountSelectionCall.getTelecomCall().getDetails().getIntentExtras();
 
@@ -706,9 +693,16 @@ public class InCallActivity extends TransactionSafeActivity implements
                     phoneAccountHandles = new ArrayList<>();
                 }
 
-                DialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
+                final DialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
                         R.string.select_phone_account_for_calls, true, phoneAccountHandles,
                         mSelectAcctListener);
+                InCallPresenter.getInstance().checkDefaultAccount(pendingAccountSelectionCall, new InCallPresenter.OnDefaultPhoneAccountHandleListener() {
+                    @Override
+                    public void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle) {
+                        dialogFragment.dismiss();
+                        InCallPresenter.getInstance().handleAccountSelection(accountHandle, false, false);
+                    }
+                });
                 dialogFragment.show(getFragmentManager(), TAG_SELECT_ACCT_FRAGMENT);
             } else if (!newOutgoingCall) {
                 showCallCardFragment(true);

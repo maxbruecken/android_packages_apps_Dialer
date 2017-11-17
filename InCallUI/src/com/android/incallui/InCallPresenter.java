@@ -20,16 +20,19 @@ import com.google.common.base.Preconditions;
 
 import android.app.FragmentManager;
 import android.content.ActivityNotFoundException;
+import android.content.ContentProviderOperation;
 import android.content.Context;
 import android.content.Intent;
 
 import android.content.res.Resources;
 import android.database.ContentObserver;
+import android.database.Cursor;
 import android.graphics.Point;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.provider.CallLog;
+import android.provider.ContactsContract;
 import android.telecom.DisconnectCause;
 import android.telecom.PhoneAccount;
 import android.telecom.PhoneAccountHandle;
@@ -39,8 +42,6 @@ import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
 
 import com.android.contacts.common.GeoUtil;
 import com.android.contacts.common.compat.CallSdkCompat;
@@ -61,11 +62,10 @@ import com.android.dialer.util.TelecomUtil;
 import com.android.incallui.util.TelecomCallUtil;
 import com.android.incalluibind.ObjectFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -916,16 +916,57 @@ public class InCallPresenter implements CallList.Listener,
         return mProximitySensor;
     }
 
-    private static Map<String, PhoneAccountHandle> defaultAccounts = new HashMap<>();
-    public PhoneAccountHandle getDefaultAccount(Call call) {
-        String number = call.getNumber();
-        if (defaultAccounts.containsKey(number)) {
-            return defaultAccounts.get(number);
-        }
-        return null;
+    public interface OnDefaultPhoneAccountHandleListener {
+        void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle);
+    }
+    private static String PHONE_ACCOUNT_MIME_TYPE = "vnd.android.cursor.item/phoneAccount";
+    public void checkDefaultAccount(final Call call, final OnDefaultPhoneAccountHandleListener listener) {
+        CallerInfoUtils.getCallerInfoForCall(mContext, call, new CallerInfoAsyncQuery.OnQueryCompleteListener() {
+            @Override
+            public void onQueryComplete(int token, Object cookie, CallerInfo ci) {
+                if (ci.contactExists) {
+                    Log.d(this, "Found caller info for actual call. Contact id: " + ci.contactIdOrZero);
+                    Cursor cursor = mContext.getContentResolver().query(
+                            ContactsContract.Data.CONTENT_URI,
+                            new String[] {
+                                    ContactsContract.Data.DATA1
+                            },
+                            ContactsContract.Data.RAW_CONTACT_ID + "=" + ci.contactIdOrZero + " AND "
+                                    + ContactsContract.Data.MIMETYPE + "= '" + PHONE_ACCOUNT_MIME_TYPE
+                                    + "'", null, null);
+                    if (cursor != null) {
+                        try {
+                            if (cursor.moveToFirst()) {
+                                String phoneAccountHandleId = cursor.getString(0);
+                                Bundle extras =
+                                        call.getTelecomCall().getDetails().getIntentExtras();
+
+                                final List<PhoneAccountHandle> phoneAccountHandles;
+                                if (extras != null) {
+                                    phoneAccountHandles = extras.getParcelableArrayList(
+                                            android.telecom.Call.AVAILABLE_PHONE_ACCOUNTS);
+                                } else {
+                                    phoneAccountHandles = new ArrayList<>();
+                                }
+                                for (PhoneAccountHandle accountHandle : phoneAccountHandles) {
+                                    if (accountHandle.getId().equals(phoneAccountHandleId)) {
+                                        listener.onDefaultPhoneAccountHandleFound(accountHandle);
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch(Exception ex) {
+                            Log.e(this, "Error while search for default phone account", ex);
+                        } finally {
+                            cursor.close();
+                        }
+                    }
+                }
+            }
+        });
     }
 
-    public void handleAccountSelection(PhoneAccountHandle accountHandle, boolean setDefault, boolean setDefaultForContact) {
+    public void handleAccountSelection(final PhoneAccountHandle accountHandle, boolean setDefault, boolean setDefaultForContact) {
         if (mCallList != null) {
             Call call = mCallList.getWaitingForAccountCall();
             if (call != null) {
@@ -933,12 +974,22 @@ public class InCallPresenter implements CallList.Listener,
                 TelecomAdapter.getInstance().phoneAccountSelected(callId, accountHandle, setDefault);
 
                 if (setDefaultForContact) {
-                    defaultAccounts.put(call.getNumber(), accountHandle);
                     CallerInfoUtils.getCallerInfoForCall(mContext, call, new CallerInfoAsyncQuery.OnQueryCompleteListener() {
                         @Override
                         public void onQueryComplete(int token, Object cookie, CallerInfo ci) {
                             if (ci.contactExists) {
-                                Log.d(this, "Found caller info for actual call");
+                                Log.d(this, "Found caller info for actual call. Contact id: " + ci.contactIdOrZero);
+                                ArrayList<ContentProviderOperation> ops = new ArrayList<ContentProviderOperation>();
+                                ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                                        .withValue(ContactsContract.Data.RAW_CONTACT_ID, ci.contactIdOrZero)
+                                        .withValue(ContactsContract.Data.MIMETYPE, PHONE_ACCOUNT_MIME_TYPE)
+                                        .withValue(ContactsContract.Data.DATA1, accountHandle.getId())
+                                        .build());
+                                try {
+                                    mContext.getContentResolver().applyBatch(ContactsContract.AUTHORITY, ops);
+                                } catch (Exception ex) {;
+                                    Log.e(this, "Error saving default phone account", ex);
+                                }
                             }
                         }
                     });
