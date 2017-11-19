@@ -693,12 +693,13 @@ public class InCallActivity extends TransactionSafeActivity implements
                     phoneAccountHandles = new ArrayList<>();
                 }
 
-                final DialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
+                final SelectPhoneAccountDialogFragment dialogFragment = SelectPhoneAccountDialogFragment.newInstance(
                         R.string.select_phone_account_for_calls, true, phoneAccountHandles,
                         mSelectAcctListener);
                 InCallPresenter.getInstance().checkDefaultAccount(pendingAccountSelectionCall, new InCallPresenter.OnDefaultPhoneAccountHandleListener() {
                     @Override
                     public void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle) {
+                        dialogFragment.setListener(null);
                         dialogFragment.dismiss();
                         InCallPresenter.getInstance().handleAccountSelection(accountHandle, false, false);
                     }
