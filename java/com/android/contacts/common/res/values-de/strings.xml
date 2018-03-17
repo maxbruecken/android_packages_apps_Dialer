@@ -245,6 +245,7 @@
     <string name="settings_contact_display_options_title" msgid="5535295687646503547">"Anzeigeoptionen für Kontakte"</string>
     <string name="select_account_dialog_title" msgid="2673504582803359239">"Konto"</string>
     <string name="set_default_account" msgid="7966099951006467572">"Diese SIM für alle Anrufe verwenden"</string>
+    <string name="set_default_account_for_contact">"Diese SIM für Anrufe auf diese Nummer immer verwenden"</string>
     <string name="select_phone_account_for_calls" msgid="1784460686103423274">"Anrufen mit"</string>
     <string name="call_with_a_note" msgid="6242261320491851133">"Mit einer Notiz anrufen"</string>
     <string name="call_subject_hint" msgid="7233138753650420800">"Notiz eingeben, die beim Anrufen gesendet wird..."</string>

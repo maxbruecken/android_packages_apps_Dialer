@@ -21,13 +21,17 @@ import android.app.ActivityManager.AppTask;
 import android.app.ActivityManager.TaskDescription;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.ContentProviderOperation;
+import android.content.ContentResolver;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnCancelListener;
 import android.content.DialogInterface.OnDismissListener;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.Cursor;
 import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -35,6 +39,7 @@ import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.res.ResourcesCompat;
+import android.telecom.Call;
 import android.telecom.PhoneAccountHandle;
 import android.view.KeyEvent;
 import android.view.View;
@@ -92,6 +97,8 @@ public class InCallActivityCommon {
   private static final int DIALPAD_REQUEST_SHOW = 2;
   private static final int DIALPAD_REQUEST_HIDE = 3;
 
+  private static String PHONE_ACCOUNT_MIME_TYPE = "vnd.android.cursor.item/phoneAccount";
+
   private final InCallActivity inCallActivity;
   private boolean dismissKeyguard;
   private boolean showPostCharWaitDialogOnResume;
@@ -106,17 +113,70 @@ public class InCallActivityCommon {
   private String dtmfTextToPreopulate;
   @DialpadRequestType private int showDialpadRequest = DIALPAD_REQUEST_NONE;
 
+  public interface OnDefaultPhoneAccountHandleListener {
+      void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle);
+  }
+
   private final SelectPhoneAccountListener selectAccountListener =
       new SelectPhoneAccountListener() {
         @Override
         public void onPhoneAccountSelected(
-            PhoneAccountHandle selectedAccountHandle, boolean setDefault, String callId) {
+                final PhoneAccountHandle selectedAccountHandle, boolean setDefault, boolean setDefaultForContact, String callId) {
           DialerCall call = CallList.getInstance().getCallById(callId);
           LogUtil.i(
               "InCallActivityCommon.SelectPhoneAccountListener.onPhoneAccountSelected",
               "call: " + call);
           if (call != null) {
             call.phoneAccountSelected(selectedAccountHandle, setDefault);
+
+            if (setDefaultForContact) {
+              CallerInfoUtils.getCallerInfoForCall(inCallActivity,
+                      call,
+                      null,
+                      new CallerInfoAsyncQuery.OnQueryCompleteListener() {
+                @Override
+                public void onQueryComplete(int token, Object cookie, CallerInfo ci) {
+                  if (ci.contactExists && ci.lookupKeyOrNull != null) {
+                    Log.d(this, "Found caller info for actual call. Lookup key: " + ci.lookupKeyOrNull);
+                    ContentResolver resolver = inCallActivity.getContentResolver();
+                    int rawContactId = -1;
+                    Cursor cursor = resolver.query(ContactsContract.CommonDataKinds.Contactables.CONTENT_URI,
+                            new String[] {
+                                    ContactsContract.CommonDataKinds.Contactables.RAW_CONTACT_ID
+                            },
+                            ContactsContract.CommonDataKinds.Contactables.LOOKUP_KEY + "='" + ci.lookupKeyOrNull + "'",
+                            null,
+                            null);
+                    try {
+                      if (cursor.moveToFirst()) {
+                        rawContactId = cursor.getInt(0);
+                      }
+
+                      if (rawContactId > 0) {
+                        ArrayList<ContentProviderOperation> ops = new ArrayList<ContentProviderOperation>();
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                                .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+                                .withValue(ContactsContract.Data.MIMETYPE, PHONE_ACCOUNT_MIME_TYPE)
+                                .withValue(ContactsContract.Data.DATA1, selectedAccountHandle.getId())
+                                .build());
+                        try {
+                          resolver.applyBatch(ContactsContract.AUTHORITY, ops);
+                        } catch (Exception ex) {
+                          Log.e(this, "Error saving default phone account", ex);
+                        }
+                      }
+                    } finally {
+                      cursor.close();
+                    }
+                  }
+                }
+
+                @Override
+                public void onDataLoaded(int token, Object cookie, CallerInfo ci) {
+
+                }
+              });
+            }
           }
         }
 
@@ -852,15 +912,92 @@ public class InCallActivityCommon {
       phoneAccountHandles = new ArrayList<>();
     }
 
+    final String callId = waitingForAccountCall.getId();
     selectPhoneAccountDialogFragment =
         SelectPhoneAccountDialogFragment.newInstance(
             R.string.select_phone_account_for_calls,
             true,
             phoneAccountHandles,
             selectAccountListener,
-            waitingForAccountCall.getId());
+                callId);
+    checkDefaultAccount(callId, new OnDefaultPhoneAccountHandleListener() {
+      @Override
+      public void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle) {
+        selectPhoneAccountDialogFragment.setListener(null);
+        selectPhoneAccountDialogFragment.dismiss();
+        selectAccountListener.onPhoneAccountSelected(accountHandle, false, callId);
+      }
+    });
     selectPhoneAccountDialogFragment.show(
         inCallActivity.getFragmentManager(), TAG_SELECT_ACCOUNT_FRAGMENT);
     return true;
+  }
+
+  public void checkDefaultAccount(String callId, final OnDefaultPhoneAccountHandleListener listener) {
+    final DialerCall call = CallList.getInstance().getCallById(callId);
+    CallerInfoUtils.getCallerInfoForCall(inCallActivity,
+      call,
+      null,
+      new CallerInfoAsyncQuery.OnQueryCompleteListener() {
+        @Override
+        public void onQueryComplete(int token, Object cookie, CallerInfo ci) {
+          if (ci.contactExists && ci.lookupKeyOrNull != null) {
+            Log.d(this, "Found caller info for actual call. Lookup key: " + ci.lookupKeyOrNull);
+            ContentResolver resolver = inCallActivity.getContentResolver();
+            int rawContactId = -1;
+            Cursor cursor = resolver.query(ContactsContract.CommonDataKinds.Contactables.CONTENT_URI,
+                    new String[] {
+                            ContactsContract.CommonDataKinds.Contactables.RAW_CONTACT_ID
+                    },
+                    ContactsContract.CommonDataKinds.Contactables.LOOKUP_KEY + "='" + ci.lookupKeyOrNull + "'",
+                    null,
+                    null);
+            try {
+              if (cursor.moveToFirst()) {
+                rawContactId = cursor.getInt(0);
+              }
+              if (rawContactId > 0) {
+                cursor = inCallActivity.getContentResolver().query(
+                        ContactsContract.Data.CONTENT_URI,
+                        new String[]{
+                                ContactsContract.Data.DATA1
+                        },
+                        ContactsContract.Data.RAW_CONTACT_ID + "=" + rawContactId + " AND "
+                                + ContactsContract.Data.MIMETYPE + "= '" + PHONE_ACCOUNT_MIME_TYPE
+                                + "'", null, null);
+                try {
+                  if (cursor.moveToFirst()) {
+                    String phoneAccountHandleId = cursor.getString(0);
+
+                    Bundle extras = call.getIntentExtras();
+
+                    final List<PhoneAccountHandle> phoneAccountHandles;
+                    if (extras != null) {
+                      phoneAccountHandles = extras.getParcelableArrayList(android.telecom.Call.AVAILABLE_PHONE_ACCOUNTS);
+                    } else {
+                      phoneAccountHandles = new ArrayList<>();
+                    }
+                    for (PhoneAccountHandle accountHandle : phoneAccountHandles) {
+                      if (accountHandle.getId().equals(phoneAccountHandleId)) {
+                        listener.onDefaultPhoneAccountHandleFound(accountHandle);
+                        return;
+                      }
+                    }
+                  }
+                } finally {
+                  cursor.close();
+                }
+              }
+            } finally {
+              cursor.close();
+            }
+          }
+        }
+
+        @Override
+        public void onDataLoaded(int token, Object cookie, CallerInfo ci) {
+
+        }
+      });
   }
 }

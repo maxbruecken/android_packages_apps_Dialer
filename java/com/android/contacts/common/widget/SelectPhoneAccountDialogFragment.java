@@ -56,12 +56,14 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
   private static final String ARG_CAN_SET_DEFAULT = "can_set_default";
   private static final String ARG_ACCOUNT_HANDLES = "account_handles";
   private static final String ARG_IS_DEFAULT_CHECKED = "is_default_checked";
+  private static final String ARG_IS_DEFAULT_FOR_CONTACT_CHECKED = "is_default_for_contact_checked";
   private static final String ARG_LISTENER = "listener";
   private static final String ARG_CALL_ID = "call_id";
 
   private List<PhoneAccountHandle> mAccountHandles;
   private boolean mIsSelected;
   private boolean mIsDefaultChecked;
+  private boolean mIsDefaultForContactChecked;
   private SelectPhoneAccountListener mListener;
 
   public SelectPhoneAccountDialogFragment() {}
@@ -120,6 +122,7 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
   public void onSaveInstanceState(Bundle outState) {
     super.onSaveInstanceState(outState);
     outState.putBoolean(ARG_IS_DEFAULT_CHECKED, mIsDefaultChecked);
+    outState.putBoolean(ARG_IS_DEFAULT_FOR_CONTACT_CHECKED, mIsDefaultForContactChecked);
   }
 
   @Override
@@ -130,6 +133,7 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
     mListener = getArguments().getParcelable(ARG_LISTENER);
     if (savedInstanceState != null) {
       mIsDefaultChecked = savedInstanceState.getBoolean(ARG_IS_DEFAULT_CHECKED);
+      mIsDefaultForContactChecked = savedInstanceState.getBoolean(ARG_IS_DEFAULT_FOR_CONTACT_CHECKED);
     }
     mIsSelected = false;
 
@@ -143,6 +147,7 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
             result.putParcelable(
                 SelectPhoneAccountListener.EXTRA_SELECTED_ACCOUNT_HANDLE, selectedAccountHandle);
             result.putBoolean(SelectPhoneAccountListener.EXTRA_SET_DEFAULT, mIsDefaultChecked);
+            result.putBoolean(SelectPhoneAccountListener.EXTRA_SET_DEFAULT_FOR_CONTACT, mIsDefaultForContactChecked);
             result.putString(SelectPhoneAccountListener.EXTRA_CALL_ID, getCallId());
             if (mListener != null) {
               mListener.onReceiveResult(SelectPhoneAccountListener.RESULT_SELECTED, result);
@@ -155,6 +160,13 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
           @Override
           public void onCheckedChanged(CompoundButton check, boolean isChecked) {
             mIsDefaultChecked = isChecked;
+          }
+        };
+    final CompoundButton.OnCheckedChangeListener forContactCheckListener =
+        new CompoundButton.OnCheckedChangeListener() {
+          @Override
+          public void onCheckedChanged(CompoundButton check, boolean isChecked) {
+            mIsDefaultForContactChecked = isChecked;
           }
         };
 
@@ -180,6 +192,10 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
       CheckBox cb = (CheckBox) checkboxLayout.findViewById(R.id.default_account_checkbox_view);
       cb.setOnCheckedChangeListener(checkListener);
       cb.setChecked(mIsDefaultChecked);
+      
+      CheckBox cbc = (CheckBox) checkboxLayout.findViewById(R.id.default_account_for_contact_checkbox_view);
+      cbc.setOnCheckedChangeListener(forContactCheckListener);
+      cbc.setChecked(mIsDefaultForContactChecked);
 
       dialog.getListView().addFooterView(checkboxLayout);
     }
@@ -210,6 +226,7 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
     static final String EXTRA_SELECTED_ACCOUNT_HANDLE = "extra_selected_account_handle";
     static final String EXTRA_SET_DEFAULT = "extra_set_default";
     static final String EXTRA_CALL_ID = "extra_call_id";
+    static final String EXTRA_SET_DEFAULT_FOR_CONTACT = "extra_set_default_for_contact";
 
     protected SelectPhoneAccountListener() {
       super(new Handler());
@@ -219,8 +236,9 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
     protected void onReceiveResult(int resultCode, Bundle resultData) {
       if (resultCode == RESULT_SELECTED) {
         onPhoneAccountSelected(
-            resultData.getParcelable(EXTRA_SELECTED_ACCOUNT_HANDLE),
+            (PhoneAccountHandle)resultData.getParcelable(EXTRA_SELECTED_ACCOUNT_HANDLE),
             resultData.getBoolean(EXTRA_SET_DEFAULT),
+            resultData.getBoolean(EXTRA_SET_DEFAULT_FOR_CONTACT),
             resultData.getString(EXTRA_CALL_ID));
       } else if (resultCode == RESULT_DISMISSED) {
         onDialogDismissed(resultData.getString(EXTRA_CALL_ID));
@@ -229,6 +247,11 @@ public class SelectPhoneAccountDialogFragment extends DialogFragment {
 
     public void onPhoneAccountSelected(
         PhoneAccountHandle selectedAccountHandle, boolean setDefault, @Nullable String callId) {}
+        
+    public void onPhoneAccountSelected(
+        PhoneAccountHandle selectedAccountHandle, boolean setDefault, boolean setDefaultForContact, @Nullable String callId) {
+      onPhoneAccountSelected(selectedAccountHandle, setDefault, callId);
+    }
 
     public void onDialogDismissed(@Nullable String callId) {}
   }

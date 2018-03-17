@@ -33,4 +33,17 @@
     android:textAppearance="?android:attr/textAppearanceSmall"
     android:textColor="@color/dialer_secondary_text_color"
     />
+  <CheckBox
+    android:id="@+id/default_account_for_contact_checkbox_view"
+    android:textAppearance="?android:attr/textAppearanceSmall"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingStart="15dip"
+    android:layout_marginLeft="13dip"
+    android:layout_marginBottom="20dip"
+    android:gravity="center"
+    android:textAlignment="viewStart"
+    android:text="@string/set_default_account_for_contact"
+    android:textColor="@color/dialtacts_secondary_text_color"
+    />
 </LinearLayout>
