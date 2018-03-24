@@ -48,6 +48,12 @@
   <!-- Color of image view placeholder. -->
   <color name="image_placeholder">#DDDDDD</color>
 
+  <!-- Primary text color in the Phone app -->
+  <color name="dialtacts_primary_text_color">#333333</color>
+
+  <!-- Secondary text color in the Phone app -->
+  <color name="dialtacts_secondary_text_color">#737373</color>
+
   <!--  Color of the semi-transparent shadow box on contact tiles -->
   <color name="contact_tile_shadow_box_color">#7F000000</color>
 
