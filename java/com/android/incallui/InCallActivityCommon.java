@@ -115,6 +115,7 @@ public class InCallActivityCommon {
 
   public interface OnDefaultPhoneAccountHandleListener {
       void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle);
+      void onNoDefaultPhoneAccountHandleFound();
   }
 
   private final SelectPhoneAccountListener selectAccountListener =
@@ -891,16 +892,13 @@ public class InCallActivityCommon {
       dismissKeyguard(true);
     }
 
-    boolean didShowAccountSelectionDialog = maybeShowAccountSelectionDialog();
-    if (didShowAccountSelectionDialog) {
-      inCallActivity.hideMainInCallFragment();
-    }
+    maybeShowAccountSelectionDialog();
   }
 
-  private boolean maybeShowAccountSelectionDialog() {
+  private void maybeShowAccountSelectionDialog() {
     DialerCall waitingForAccountCall = CallList.getInstance().getWaitingForAccountCall();
     if (waitingForAccountCall == null) {
-      return false;
+      return;
     }
 
     Bundle extras = waitingForAccountCall.getIntentExtras();
@@ -919,18 +917,23 @@ public class InCallActivityCommon {
             true,
             phoneAccountHandles,
             selectAccountListener,
-                callId);
+            callId);
     checkDefaultAccount(callId, new OnDefaultPhoneAccountHandleListener() {
       @Override
       public void onDefaultPhoneAccountHandleFound(PhoneAccountHandle accountHandle) {
         selectPhoneAccountDialogFragment.setListener(null);
         selectPhoneAccountDialogFragment.dismiss();
+        selectPhoneAccountDialogFragment = null;
         selectAccountListener.onPhoneAccountSelected(accountHandle, false, callId);
       }
+
+      @Override
+      public void onNoDefaultPhoneAccountHandleFound() {
+        selectPhoneAccountDialogFragment.show(
+                inCallActivity.getFragmentManager(), TAG_SELECT_ACCOUNT_FRAGMENT);
+        inCallActivity.hideMainInCallFragment();
+      }
     });
-    selectPhoneAccountDialogFragment.show(
-        inCallActivity.getFragmentManager(), TAG_SELECT_ACCOUNT_FRAGMENT);
-    return true;
   }
 
   public void checkDefaultAccount(String callId, final OnDefaultPhoneAccountHandleListener listener) {
@@ -992,6 +995,7 @@ public class InCallActivityCommon {
               cursor.close();
             }
           }
+          listener.onNoDefaultPhoneAccountHandleFound();
         }
 
         @Override
