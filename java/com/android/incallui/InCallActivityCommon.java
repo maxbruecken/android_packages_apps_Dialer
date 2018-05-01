@@ -924,7 +924,7 @@ public class InCallActivityCommon {
         selectPhoneAccountDialogFragment.setListener(null);
         selectPhoneAccountDialogFragment.dismiss();
         selectPhoneAccountDialogFragment = null;
-        selectAccountListener.onPhoneAccountSelected(accountHandle, false, callId);
+        selectAccountListener.onPhoneAccountSelected(accountHandle, false, false, callId);
       }
 
       @Override
